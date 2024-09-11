@@ -23,17 +23,42 @@
       </div>
 
       <div class="mb-3">
-          <label for="sitemapFile" class="form-label fw-bold">Upload Sitemap XML</label>
-          <input class="form-control" type="text" id="sitemapUrl">
-          <input class="form-control" type="file" id="sitemapFile" accept=".xml">
+          <label for="sitemapFile" class="form-label fw-bold">Sitemap XML</label>
+          <div class="d-flex align-items-center">
+            <div class="input-group">
+              <span class="input-group-text">URL</span>
+              <input type="text" class="form-control" id="sitemapUrl" placeholder="https://example.com/sitemap.xml">
+              <span class="input-group-text pe-cursor" id="loadingFetchUrl">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-magic" viewBox="0 0 16 16">
+                  <path d="M9.5 2.672a.5.5 0 1 0 1 0V.843a.5.5 0 0 0-1 0zm4.5.035A.5.5 0 0 0 13.293 2L12 3.293a.5.5 0 1 0 .707.707zM7.293 4A.5.5 0 1 0 8 3.293L6.707 2A.5.5 0 0 0 6 2.707zm-.621 2.5a.5.5 0 1 0 0-1H4.843a.5.5 0 1 0 0 1zm8.485 0a.5.5 0 1 0 0-1h-1.829a.5.5 0 0 0 0 1zM13.293 10A.5.5 0 1 0 14 9.293L12.707 8a.5.5 0 1 0-.707.707zM9.5 11.157a.5.5 0 0 0 1 0V9.328a.5.5 0 0 0-1 0zm1.854-5.097a.5.5 0 0 0 0-.706l-.708-.708a.5.5 0 0 0-.707 0L8.646 5.94a.5.5 0 0 0 0 .707l.708.708a.5.5 0 0 0 .707 0l1.293-1.293Zm-3 3a.5.5 0 0 0 0-.706l-.708-.708a.5.5 0 0 0-.707 0L.646 13.94a.5.5 0 0 0 0 .707l.708.708a.5.5 0 0 0 .707 0z"/>
+                </svg>
+              </span>
+            </div>
+            <p class="px-3 mb-0 fst-italic">or</p>
+            <input class="form-control" type="file" id="sitemapFile" accept=".xml">
+          </div>
       </div>
 
-      <div class="mb-3">
-          <label for="sitemapContent" class="form-label fw-bold">Sitemap Content</label>
-          <textarea class="form-control fs-6-sm" id="sitemapContent" rows="10"></textarea>
+      <div class="row">
+        <div class="col-6">
+          <div class="mb-3">
+            <label for="sitemapContent" class="form-label fw-bold">Sitemap Content</label>
+            <textarea class="form-control fs-6-sm" id="sitemapContent" rows="10"></textarea>
+        </div>
+
+        </div>
+        <div class="col-6">
+          <div class="mb-3">
+            <label for="sitemapContent" class="form-label fw-bold">Log request</label>
+            <textarea class="form-control fs-6-sm" id="logContent" rows="10" readonly style="max-height: 300px; overflow-y: auto;"></textarea>
+        </div>
+        </div>
       </div>
 
-      <button id="parseButton" class="btn btn-outline-primary mb-3">Checking URL</button>
+      <div class="d-flex">
+        <button id="parseButton" class="btn btn-outline-primary mb-3">Check URL</button>
+        <button id="cancelButton" class="btn btn-outline-danger mb-3 ms-2" style="display: none;">Cancel</button>
+      </div>
 
       <div id="stats" class="d-flex fw-bold">
           <p>Total URLs: <span id="totalUrls">0</span></p>
@@ -54,8 +79,12 @@
       </div>
     </div>
     <footer class="text-center mt-4">
-        <p>&copy; 2023 Sitemap Checker by TANG QUOC MINH. All rights reserved.</p>
+        <p>&copy; <span id="currentYear"></span> Sitemap Checker by TANG QUOC MINH. All rights reserved.</p>
     </footer>
     <script type="module" src="/main.js"></script>
+    <script>
+      const currentYear = new Date().getFullYear();
+      document.getElementById('currentYear').textContent = currentYear === 2024 ? '2024' : `2024 - ${currentYear}`;
+    </script>
   </body>
 </html>

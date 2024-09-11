@@ -1,7 +1,4 @@
 import './style.css'
-// import javascriptLogo from './javascript.svg'
-// import viteLogo from '/vite.svg'
-// import { setupCounter } from './counter.js'
 
 const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
 const sitemapFile = document.getElementById('sitemapFile');
@@ -13,8 +10,18 @@ const searchInput = document.getElementById('searchInput');
 const openAllButton = document.getElementById('openAllButton');
 const totalUrlsSpan = document.getElementById('totalUrls');
 const checkedUrlsSpan = document.getElementById('checkedUrls');
+const loadingFetchUrl = document.getElementById('loadingFetchUrl');
+const logContent = document.getElementById('logContent');
+const cancelButton = document.getElementById('cancelButton');
+const currentYear = document.getElementById('currentYear');
+
+// Display copyright year
+const numYear = new Date().getFullYear();
+document.getElementById('currentYear').textContent = numYear === 2024 ? '2024' : `2024 - ${currentYear}`;
 
 let urls = [];
+let isCancelled = false;
+let abortController;
 
 sitemapFile.addEventListener('change', (event) => {
   const file = event.target.files[0];
@@ -26,21 +33,38 @@ sitemapFile.addEventListener('change', (event) => {
       };
 
       reader.readAsText(file);
+  } else {
+      sitemapContent.value = ''; // Reset textarea khi không có file được chọn
   }
+});
+
+loadingFetchUrl.addEventListener('click', async (event) => {
+  event.preventDefault();
+ sitemapUrlInput.dispatchEvent(new Event('change'));
 });
 
 sitemapUrlInput.addEventListener('change', async (event) => {
   const url = event.target.value;
+  sitemapContent.value = ''; // Reset textarea khi URL thay đổi
+  const iconLoadingFetchUrl = loadingFetchUrl.innerHTML
   if (url) {
       try {
+          loadingFetchUrl.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+          loadingFetchUrl.style.display = 'inline-block';
+
           const response = await fetchWithCORSCheck(url);
+
           if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
           }
           const text = await response.text();
           sitemapContent.value = text;
+          logMessage(`Fetched sitemap from ${url}`);
       } catch (error) {
+          logMessage(`Failed to fetch sitemap: ${error.message}`);
           alert(`Failed to fetch sitemap: ${error.message}`);
+      } finally {
+          loadingFetchUrl.innerHTML = iconLoadingFetchUrl;
       }
   }
 });
@@ -52,7 +76,10 @@ function updateUrlCounts() {
 
 parseButton.addEventListener('click', async () => {
     parseButton.disabled = true;
-    parseButton.textContent = "Processing...";
+    parseButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+    cancelButton.style.display = 'inline-block';
+    isCancelled = false;
+    abortController = new AbortController(); // Tạo AbortController mới
 
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
@@ -68,45 +95,65 @@ parseButton.addEventListener('click', async () => {
         return;
     }
 
-    urls = await fetchUrlsRecursively(Array.from(urlElements), parser);
-
-    urls = urls.flat();
-
-    totalUrlsSpan.textContent = urls.length;
-    checkedUrlsSpan.textContent = "0";
-
-    updateUrlCounts();
-    renderUrlGrid();
+    urls = [];
+    for (const urlElement of urlElements) {
+        if (isCancelled) break;
+        await fetchUrlsRecursively([urlElement], parser);
+    }
 
     parseButton.disabled = false;
-    parseButton.textContent = "Checking URL";
+    parseButton.innerHTML = 'Checking URL';
+    cancelButton.style.display = 'none';
+});
+
+cancelButton.addEventListener('click', () => {
+    isCancelled = true;
+    if (abortController) {
+        abortController.abort(); // Hủy tất cả các request đang thực thi
+    }
+    parseButton.disabled = false;
+    parseButton.innerHTML = 'Checking URL';
+    cancelButton.style.display = 'none';
+    logMessage('Operation cancelled by user');
 });
 
 async function fetchUrlsRecursively(urlElements, parser) {
-    return await Promise.all(urlElements.map(async urlElement => {
+    for (const urlElement of urlElements) {
         const loc = urlElement.getElementsByTagName("loc")[0].textContent;
         if (urlElement.tagName === 'sitemap') {
             try {
-                const response = await fetchWithCORSCheck(loc);
+                const response = await fetchWithCORSCheck(loc, abortController);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const text = await response.text();
                 const subXmlDoc = parser.parseFromString(text, "text/xml");
-                const urlElements = subXmlDoc.getElementsByTagName("sitemap");
-                if (urlElements.length) {
-                    return await fetchUrlsRecursively(Array.from(urlElements), parser);
+                const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
+                if (subUrlElements.length) {
+                    await fetchUrlsRecursively(Array.from(subUrlElements), parser);
                 } else {
-                    return [{ url: loc, checked: false }];
+                    addAndRenderUrl(loc);
                 }
             } catch (error) {
                 console.error(`Failed to fetch nested sitemap: ${error.message}`);
-                return [{ url: loc, checked: false }];
+                addAndRenderUrl(loc);
             }
         } else {
-            return { url: loc, checked: false };
+            addAndRenderUrl(loc);
         }
-    }));
+    }
+}
+
+function addAndRenderUrl(url) {
+    const urlObj = { url, checked: false };
+    urls.push(urlObj);
+    renderSingleUrl(urlObj, urls.length - 1);
+    updateUrlCounts();
+}
+
+function renderSingleUrl(urlObj, index) {
+    const card = createUrlCard(urlObj, index);
+    urlGrid.appendChild(card);
 }
 
 function renderUrlGrid() {
@@ -126,9 +173,9 @@ function createUrlCard(urlObj, index) {
               <h5 class="card-title"><a href="${urlObj.url}" target="_blank">${urlObj.url}</a></h5>
               <div class="card-header mb-3">
                   <span class="status ${getStatusClass(urlObj.status)}">
-                      Status: ${urlObj.checked ? urlObj.status : 'Not checked'}
+                      Trạng thái: ${urlObj.checked ? urlObj.status : 'Chưa kiểm tra'}
                   </span>
-                  <button class="btn btn-outline-info btn-sm check-url" data-index="${index}">Refresh Meta</button>
+                  <button class="btn btn-outline-info btn-sm check-url" data-index="${index}">Làm mới Meta</button>
               </div>
               <!--
               <div class="form-check">
@@ -156,32 +203,38 @@ function createUrlCard(urlObj, index) {
   return card;
 }
 
-async function fetchWithCORSCheck(url) {
+async function fetchWithCORSCheck(url, controller = null) {
   try {
-      const response = await fetch(url);
+      const options = controller ? { signal: controller.signal } : {};
+      const response = await fetch(url, options);
       return response;
   } catch (error) {
-      if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('CORS')) ) {
-        console.log(CORS_PROXY + url)
-        return fetch(CORS_PROXY + url);
+      if (error.name === 'AbortError') {
+          throw new Error('Request was cancelled');
       }
-      // throw error;
+      if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('CORS'))) {
+        console.log(CORS_PROXY + url)
+        return fetch(CORS_PROXY + url, controller ? { signal: controller.signal } : {});
+      }
+      throw error;
   }
 }
 
 function getStatusClass(status) {
-  if (!status || status === 'Not checked' || status === 'Processing') return 'status-processing';
+  if (!status || status === 'Chưa kiểm tra' || status === 'Đang xử lý') return 'status-processing';
   if (status === 'OK') return 'status-success';
   return 'status-error';
 }
 
 async function checkUrl(index) {
+  if (isCancelled) return;
   const urlObj = urls[index];
   try {
-      urlObj.status = 'Processing';
+      urlObj.status = 'Đang xử lý';
       updateUrlCard(index);
+      logMessage(`Checking URL: ${urlObj.url}`);
 
-      const response = await fetchWithCORSCheck(urlObj.url);
+      const response = await fetchWithCORSCheck(urlObj.url, abortController);
       if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -190,9 +243,15 @@ async function checkUrl(index) {
       urlObj.meta = metaInfo;
       urlObj.checked = true;
       urlObj.status = 'OK';
+      logMessage(`Successfully checked URL: ${urlObj.url}`);
   } catch (error) {
-      urlObj.checked = true;
-      urlObj.status = `Error: ${error.message}`;
+      if (error.message === 'Request was cancelled') {
+          urlObj.status = 'Đã hủy';
+      } else {
+          urlObj.checked = true;
+          urlObj.status = `Lỗi: ${error.message}`;
+          logMessage(`Error checking URL ${urlObj.url}: ${error.message}`);
+      }
   }
 
   urls[index] = urlObj;
@@ -205,25 +264,32 @@ function extractMetaInfo(html) {
   const doc = parser.parseFromString(html, 'text/html');
 
   return {
-      google: {
-          title: doc.querySelector('title')?.textContent || '',
-          description: doc.querySelector('meta[name="description"]')?.content || '',
-          canonical: doc.querySelector('link[rel="canonical"]')?.href || '',
-          robots: doc.querySelector('meta[name="robots"]')?.content || '',
-      },
-      facebook: {
-          title: doc.querySelector('meta[property="og:title"]')?.content || '',
-          description: doc.querySelector('meta[property="og:description"]')?.content || '',
-          image: doc.querySelector('meta[property="og:image"]')?.content || '',
-          url: doc.querySelector('meta[property="og:url"]')?.content || '',
-          type: doc.querySelector('meta[property="og:type"]')?.content || '',
-      },
-      twitter: {
-          card: doc.querySelector('meta[name="twitter:card"]')?.content || '',
-          title: doc.querySelector('meta[name="twitter:title"]')?.content || '',
-          description: doc.querySelector('meta[name="twitter:description"]')?.content || '',
-          image: doc.querySelector('meta[name="twitter:image"]')?.content || '',
-      },
+    google: {
+      title: doc.querySelector('title')?.textContent || '',
+      description: doc.querySelector('meta[name="description"]')?.content || '',
+      keywords: doc.querySelector('meta[name="keywords"]')?.content || '',
+      canonical: doc.querySelector('link[rel="canonical"]')?.href || '',
+      robots: doc.querySelector('meta[name="robots"]')?.content || '',
+      favicon: doc.querySelector('link[rel="icon"]')?.href || '',
+    },
+    facebook: {
+      title: doc.querySelector('meta[property="og:title"]')?.content || '',
+      description: doc.querySelector('meta[property="og:description"]')?.content || '',
+      image: doc.querySelector('meta[property="og:image"]')?.content || '',
+      url: doc.querySelector('meta[property="og:url"]')?.content || '',
+      type: doc.querySelector('meta[property="og:type"]')?.content || '',
+      siteName: doc.querySelector('meta[property="og:site_name"]')?.content || '',
+      locale: doc.querySelector('meta[property="og:locale"]')?.content || '',
+    },
+    twitter: {
+      card: doc.querySelector('meta[name="twitter:card"]')?.content || '',
+      title: doc.querySelector('meta[name="twitter:title"]')?.content || '',
+      description: doc.querySelector('meta[name="twitter:description"]')?.content || '',
+      image: doc.querySelector('meta[name="twitter:image"]')?.content || '',
+      site: doc.querySelector('meta[name="twitter:site"]')?.content || '',
+      creator: doc.querySelector('meta[name="twitter:creator"]')?.content || '',
+    },
+    schema: doc.querySelector('script[type="application/ld+json"]')?.textContent || '',
   };
 }
 
@@ -233,32 +299,40 @@ function updateUrlCard(index) {
   if (!card) return;
 
   const statusElement = card.querySelector('.status');
-  statusElement.textContent = `Status: ${urlObj.status}`;
+  statusElement.textContent = `Trạng thái: ${urlObj.status}`;
   statusElement.className = `status ${getStatusClass(urlObj.status)}`;
-  statusElement.textContent = `Status: ${urlObj.status}`;
 
   const metaContainer = card.querySelector('.meta-info');
   if (urlObj.meta) {
-      metaContainer.innerHTML = `
-          <h6>Google Meta:</h6>
-          <p>Title: ${urlObj.meta.google.title}</p>
-          <p>Description: ${urlObj.meta.google.description}</p>
-          <p>Canonical: ${urlObj.meta.google.canonical}</p>
-          <p>Robots: ${urlObj.meta.google.robots}</p>
+    metaContainer.innerHTML = `
+      <h6>Meta Google:</h6>
+      <p>Tiêu đề: ${urlObj.meta.google.title}</p>
+      <p>Mô tả: ${urlObj.meta.google.description}</p>
+      <p>Từ khóa: ${urlObj.meta.google.keywords}</p>
+      <p>Canonical: ${urlObj.meta.google.canonical}</p>
+      <p>Robots: ${urlObj.meta.google.robots}</p>
+      ${urlObj.meta.google.favicon ? `<p>Favicon: <img src="${urlObj.meta.google.favicon}" alt="Favicon" style="width: 16px; height: 16px;"></p>` : ''}
 
-          <h6>Facebook Meta:</h6>
-          <p>Title: ${urlObj.meta.facebook.title}</p>
-          <p>Description: ${urlObj.meta.facebook.description}</p>
-          <p>URL: ${urlObj.meta.facebook.url}</p>
-          <p>Type: ${urlObj.meta.facebook.type}</p>
-          ${urlObj.meta.facebook.image ? `<img src="${urlObj.meta.facebook.image}" alt="OG Image" style="max-width: 100%; height: auto;">` : ''}
+      <h6>Meta Facebook:</h6>
+      <p>Tiêu đề: ${urlObj.meta.facebook.title}</p>
+      <p>Mô tả: ${urlObj.meta.facebook.description}</p>
+      <p>URL: ${urlObj.meta.facebook.url}</p>
+      <p>Loại: ${urlObj.meta.facebook.type}</p>
+      <p>Tên trang: ${urlObj.meta.facebook.siteName}</p>
+      <p>Ngôn ngữ: ${urlObj.meta.facebook.locale}</p>
+      ${urlObj.meta.facebook.image ? `<p>Hình ảnh: <img src="${urlObj.meta.facebook.image}" alt="OG Image" style="max-width: 100%; height: auto;"></p>` : ''}
 
-          <h6>Twitter Meta:</h6>
-          <p>Card: ${urlObj.meta.twitter.card}</p>
-          <p>Title: ${urlObj.meta.twitter.title}</p>
-          <p>Description: ${urlObj.meta.twitter.description}</p>
-          ${urlObj.meta.twitter.image ? `<img src="${urlObj.meta.twitter.image}" alt="Twitter Image" style="max-width: 100%; height: auto;">` : ''}
-      `;
+      <h6>Meta Twitter:</h6>
+      <p>Card: ${urlObj.meta.twitter.card}</p>
+      <p>Tiêu đề: ${urlObj.meta.twitter.title}</p>
+      <p>Mô tả: ${urlObj.meta.twitter.description}</p>
+      <p>Site: ${urlObj.meta.twitter.site}</p>
+      <p>Người tạo: ${urlObj.meta.twitter.creator}</p>
+      ${urlObj.meta.twitter.image ? `<p>Hình ảnh: <img src="${urlObj.meta.twitter.image}" alt="Twitter Image" style="max-width: 100%; height: auto;"></p>` : ''}
+
+      <h6>Schema.org:</h6>
+      <pre>${urlObj.meta.schema ? JSON.stringify(JSON.parse(urlObj.meta.schema), null, 2) : 'Không có dữ liệu Schema.org'}</pre>
+    `;
   }
 }
 
@@ -296,9 +370,9 @@ const exportButton = document.getElementById('exportButton');
 
 exportButton.addEventListener('click', () => {
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "URL,Status,Google Title,Google Description,Google Canonical,Google Robots,";
-    csvContent += "Facebook Title,Facebook Description,Facebook Image,Facebook URL,Facebook Type,";
-    csvContent += "Twitter Card,Twitter Title,Twitter Description,Twitter Image\n";
+    csvContent += "URL,Trạng thái,Google Tiêu đề,Google Mô tả,Google Từ khóa,Google Canonical,Google Robots,Google Favicon,";
+    csvContent += "Facebook Tiêu đề,Facebook Mô tả,Facebook Hình ảnh,Facebook URL,Facebook Loại,Facebook Tên trang,Facebook Ngôn ngữ,";
+    csvContent += "Twitter Card,Twitter Tiêu đề,Twitter Mô tả,Twitter Hình ảnh,Twitter Site,Twitter Người tạo,Schema.org\n";
 
     urls.forEach(urlObj => {
         let row = [
@@ -306,17 +380,24 @@ exportButton.addEventListener('click', () => {
             urlObj.status || '',
             urlObj.meta?.google.title || '',
             urlObj.meta?.google.description || '',
+            urlObj.meta?.google.keywords || '',
             urlObj.meta?.google.canonical || '',
             urlObj.meta?.google.robots || '',
+            urlObj.meta?.google.favicon || '',
             urlObj.meta?.facebook.title || '',
             urlObj.meta?.facebook.description || '',
             urlObj.meta?.facebook.image || '',
             urlObj.meta?.facebook.url || '',
             urlObj.meta?.facebook.type || '',
+            urlObj.meta?.facebook.siteName || '',
+            urlObj.meta?.facebook.locale || '',
             urlObj.meta?.twitter.card || '',
             urlObj.meta?.twitter.title || '',
             urlObj.meta?.twitter.description || '',
-            urlObj.meta?.twitter.image || ''
+            urlObj.meta?.twitter.image || '',
+            urlObj.meta?.twitter.site || '',
+            urlObj.meta?.twitter.creator || '',
+            urlObj.meta?.schema || ''
         ];
         csvContent += row.map(value => `"${value.replace(/"/g, '""')}"`).join(',') + "\n";
     });
@@ -329,3 +410,9 @@ exportButton.addEventListener('click', () => {
     link.click();
     document.body.removeChild(link);
 });
+
+function logMessage(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    logContent.value += `[${timestamp}] ${message}\n`;
+    logContent.scrollTop = logContent.scrollHeight;
+}
