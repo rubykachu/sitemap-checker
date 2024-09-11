@@ -37,45 +37,52 @@ const gridViewBtn = document.getElementById('gridViewBtn');
 const tableViewBtn = document.getElementById('tableViewBtn');
 const tableContainer = document.getElementById('tableContainer');
 
+// Thêm biến mới
+const noRenderUIBtn = document.getElementById('noRenderUIBtn');
+
 // Thêm sự kiện cho các nút chuyển đổi
-gridViewBtn.addEventListener('click', showGridView);
-tableViewBtn.addEventListener('click', showTableView);
+gridViewBtn.addEventListener('click', () => setViewMode('grid'));
+tableViewBtn.addEventListener('click', () => setViewMode('table'));
+noRenderUIBtn.addEventListener('click', () => setViewMode('noRender'));
 
-function showGridView() {
-  urlGrid.style.display = 'flex';
-  tableContainer.style.display = 'none';
-  gridViewBtn.classList.add('btn-primary');
-  gridViewBtn.classList.remove('btn-secondary');
-  tableViewBtn.classList.add('btn-secondary');
-  tableViewBtn.classList.remove('btn-primary');
+// Thêm biến để theo dõi chế độ xem hiện tại
+let currentViewMode = 'grid';
+
+// Hàm để thiết lập chế độ xem
+function setViewMode(mode) {
+  currentViewMode = mode;
+  gridViewBtn.classList.toggle('btn-primary', mode === 'grid');
+  gridViewBtn.classList.toggle('btn-secondary', mode !== 'grid');
+  tableViewBtn.classList.toggle('btn-primary', mode === 'table');
+  tableViewBtn.classList.toggle('btn-secondary', mode !== 'table');
+  noRenderUIBtn.classList.toggle('btn-primary', mode === 'noRender');
+  noRenderUIBtn.classList.toggle('btn-secondary', mode !== 'noRender');
+
+  updateUIVisibility();
 }
 
-function showTableView() {
-  urlGrid.style.display = 'none';
-  tableContainer.style.display = 'block';
-  gridViewBtn.classList.add('btn-secondary');
-  gridViewBtn.classList.remove('btn-primary');
-  tableViewBtn.classList.add('btn-primary');
-  tableViewBtn.classList.remove('btn-secondary');
+// Cập nhật hàm updateUIVisibility
+function updateUIVisibility() {
+  const isGridHidden = currentViewMode !== 'grid';
+  const isTableHidden = currentViewMode !== 'table';
+  urlGrid.style.display = isGridHidden ? 'none' : 'flex';
+  if (isTableHidden) {
+    tableContainer.style.display = 'none'
+  } else {
+    tableContainer.style.display = 'block'
+    renderDataTableWhenReady();
+  }
 
-  if (requestCompletedAll) {
-    if (!dataTable) {
-      initDataTable();
-    } else {
-      dataTable.clear().rows.add(urls).draw();
-    }
+  if (currentViewMode === 'noRender') {
+    urlGrid.style.display = 'none';
+    tableContainer.style.display = 'none';
   }
 }
 
-// Thêm hàm mới để render DataTable khi tất cả yêu cầu hoàn thành
-function renderDataTableWhenReady() {
-  if (requestCompletedAll && tableContainer.style.display !== 'none') {
-    if (!dataTable) {
-      initDataTable();
-    } else {
-      dataTable.clear().rows.add(urls).draw();
-    }
-  }
+// Cập nhật hàm renderSingleUrl
+function renderSingleUrl(urlObj, index) {
+    const card = createUrlCard(urlObj, index);
+    urlGrid.appendChild(card)
 }
 
 function initDataTable() {
@@ -227,6 +234,17 @@ function updateButtonStates() {
   }
 }
 
+// Thêm hàm mới để render DataTable khi tất cả yêu cầu hoàn thành
+function renderDataTableWhenReady() {
+  if (requestCompletedAll && tableContainer.style.display !== 'none') {
+    if (!dataTable) {
+      initDataTable();
+    } else {
+      dataTable.clear().rows.add(urls).draw();
+    }
+  }
+}
+
 // Cập nhật hàm checkUrl
 async function checkUrl(index) {
   if (isCancelled) return;
@@ -235,7 +253,7 @@ async function checkUrl(index) {
   const metaContainer = card?.querySelector('.meta-info');
 
   try {
-    activeRequests++; // Tăng số lượng request đang xử lý
+    activeRequests++;
     updateButtonStates();
 
     urlObj.status = 'Đang xử lý';
@@ -269,10 +287,10 @@ async function checkUrl(index) {
       logMessage(`Error checking URL ${urlObj.url}: ${error.message}`);
     }
   } finally {
-    activeRequests--; // Giảm số lượng request đang xử lý
+    activeRequests--;
     if (activeRequests === 0) {
-        requestCompletedAll = true;
-        renderDataTableWhenReady(); // Gọi hàm mới này khi tất cả yêu cầu hoàn thành
+      requestCompletedAll = true;
+      renderDataTableWhenReady();
     }
     updateButtonStates();
     urls[index] = urlObj;
@@ -296,6 +314,7 @@ parseButton.addEventListener('click', async () => {
   urlGrid.innerHTML = '';
   urls = [];
   updateUrlCounts();
+  updateUIVisibility();
 
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
@@ -376,11 +395,6 @@ function addAndRenderUrl(url) {
     urls.push(urlObj);
     renderSingleUrl(urlObj, urls.length - 1);
     updateUrlCounts();
-}
-
-function renderSingleUrl(urlObj, index) {
-    const card = createUrlCard(urlObj, index);
-    urlGrid.appendChild(card);
 }
 
 // Cập nhật hàm createUrlCard để loại bỏ các tùy chọn meta SEO
@@ -478,7 +492,7 @@ function extractMetaInfo(html) {
   };
 }
 
-// Cập nhật hàm updateUrlCard để sử dụng các tùy chọn meta SEO toàn cục
+// Cập nhật hàm updateUrlCard
 function updateUrlCard(index) {
   const urlObj = urls[index];
   const card = document.querySelector(`.card[data-index="${index}"]`);
@@ -544,10 +558,6 @@ function updateUrlCard(index) {
       schemaContent.textContent = '';
       schemaDetails.style.display = 'none';
     }
-  }
-
-  if (dataTable) {
-    dataTable.row(index).data(urlObj).draw(false);
   }
 }
 
