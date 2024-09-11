@@ -100,14 +100,14 @@ parseButton.addEventListener('click', async () => {
         return;
     }
 
-    for (const urlElement of urlElements) {
-        if (isCancelled) break;
-        await fetchUrlsRecursively([urlElement], parser);
+    try {
+        await fetchUrlsRecursively(Array.from(urlElements), parser);
+    } catch (error) {
+        logMessage(`Error processing sitemap: ${error.message}`);
+    } finally {
+        parseButton.disabled = false;
+        parseButton.innerHTML = 'Checking URL';
     }
-
-    parseButton.disabled = false;
-    parseButton.innerHTML = 'Checking URL';
-    cancelButton.style.display = 'none';
 });
 
 cancelButton.addEventListener('click', () => {
@@ -116,36 +116,45 @@ cancelButton.addEventListener('click', () => {
         abortController.abort(); // Hủy tất cả các request đang thực thi
     }
     parseButton.disabled = false;
-    parseButton.innerHTML = 'Checking URL';
+    parseButton.innerHTML = 'Check URL';
     cancelButton.style.display = 'none';
     logMessage('Operation cancelled by user');
 });
 
-async function fetchUrlsRecursively(urlElements, parser) {
-    for (const urlElement of urlElements) {
+async function fetchUrlsRecursively(urlElements, parser, depth = 0) {
+    const fetchPromises = urlElements.map(async (urlElement) => {
         const loc = urlElement.getElementsByTagName("loc")[0].textContent;
         if (urlElement.tagName === 'sitemap') {
             try {
+                logMessage(`Đang truy cập sitemap con (độ sâu ${depth}): ${loc}`);
                 const response = await fetchWithCORSCheck(loc, abortController);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const text = await response.text();
+                logMessage(`Đã tải thành công sitemap con: ${loc}`);
                 const subXmlDoc = parser.parseFromString(text, "text/xml");
                 const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
                 if (subUrlElements.length) {
-                    await fetchUrlsRecursively(Array.from(subUrlElements), parser);
+                    await fetchUrlsRecursively(Array.from(subUrlElements), parser, depth + 1);
                 } else {
-                    addAndRenderUrl(loc);
+                    const subUrls = subXmlDoc.getElementsByTagName("url");
+                    logMessage(`Tìm thấy ${subUrls.length} URL trong sitemap con: ${loc}`);
+                    Array.from(subUrls).forEach(subUrl => {
+                        const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
+                        addAndRenderUrl(subLoc);
+                    });
                 }
             } catch (error) {
-                console.error(`Failed to fetch nested sitemap: ${error.message}`);
+                logMessage(`Lỗi khi tải sitemap con ${loc}: ${error.message}`);
                 addAndRenderUrl(loc);
             }
         } else {
             addAndRenderUrl(loc);
         }
-    }
+    });
+
+    await Promise.all(fetchPromises);
 }
 
 function addAndRenderUrl(url) {
@@ -158,14 +167,6 @@ function addAndRenderUrl(url) {
 function renderSingleUrl(urlObj, index) {
     const card = createUrlCard(urlObj, index);
     urlGrid.appendChild(card);
-}
-
-function renderUrlGrid() {
-    urlGrid.innerHTML = '';
-    urls.forEach((urlObj, index) => {
-        const card = createUrlCard(urlObj, index);
-        urlGrid.appendChild(card);
-    });
 }
 
 // Thêm các biến cho tùy chọn meta SEO ở đầu file
@@ -194,8 +195,8 @@ function createUrlCard(urlObj, index) {
               </div>
               <div class="schema-info mt-3">
                   <details>
-                      <summary class="schema-summary">Đang kiểm tra schema...</summary>
-                      <pre class="schema-content mt-2"></pre>
+                      <summary class="schema-summary">Đang tải schema...</summary>
+                      <pre class="schema-content mt-2"><div class="skeleton skeleton-text"></div></pre>
                   </details>
               </div>
           </div>
