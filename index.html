@@ -24,6 +24,7 @@
 
       <div class="mb-3">
           <label for="sitemapFile" class="form-label fw-bold">Upload Sitemap XML</label>
+          <input class="form-control" type="text" id="sitemapUrl">
           <input class="form-control" type="file" id="sitemapFile" accept=".xml">
       </div>
 
@@ -32,7 +33,7 @@
           <textarea class="form-control fs-6-sm" id="sitemapContent" rows="10"></textarea>
       </div>
 
-      <button id="parseButton" class="btn btn-outline-primary mb-3">Check URL</button>
+      <button id="parseButton" class="btn btn-outline-primary mb-3">Checking URL</button>
 
       <div id="stats" class="d-flex fw-bold">
           <p>Total URLs: <span id="totalUrls">0</span></p>

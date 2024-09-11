@@ -6,6 +6,7 @@ import './style.css'
 const CORS_PROXY = "https://cors-anywhere.herokuapp.com/";
 const sitemapFile = document.getElementById('sitemapFile');
 const sitemapContent = document.getElementById('sitemapContent');
+const sitemapUrlInput = document.getElementById('sitemapUrl');
 const parseButton = document.getElementById('parseButton');
 const urlGrid = document.getElementById('urlGrid');
 const searchInput = document.getElementById('searchInput');
@@ -28,12 +29,31 @@ sitemapFile.addEventListener('change', (event) => {
   }
 });
 
+sitemapUrlInput.addEventListener('change', async (event) => {
+  const url = event.target.value;
+  if (url) {
+      try {
+          const response = await fetchWithCORSCheck(url);
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const text = await response.text();
+          sitemapContent.value = text;
+      } catch (error) {
+          alert(`Failed to fetch sitemap: ${error.message}`);
+      }
+  }
+});
+
 function updateUrlCounts() {
   totalUrlsSpan.textContent = urls.length;
   checkedUrlsSpan.textContent = urls.filter(url => url.checked).length;
 }
 
-parseButton.addEventListener('click', () => {
+parseButton.addEventListener('click', async () => {
+    parseButton.disabled = true;
+    parseButton.textContent = "Processing...";
+
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
     let urlElements = xmlDoc.getElementsByTagName("url");
@@ -45,20 +65,49 @@ parseButton.addEventListener('click', () => {
     if (!urlElements.length) {
         alert("The structure of the URL could not be detected in the sitemap.");
         location.reload();
-        return
+        return;
     }
 
-    urls = Array.from(urlElements).map(urlElement => {
-        const loc = urlElement.getElementsByTagName("loc")[0].textContent;
-        return { url: loc, checked: false };
-    });
+    urls = await fetchUrlsRecursively(Array.from(urlElements), parser);
+
+    urls = urls.flat();
 
     totalUrlsSpan.textContent = urls.length;
     checkedUrlsSpan.textContent = "0";
 
-    updateUrlCounts
+    updateUrlCounts();
     renderUrlGrid();
+
+    parseButton.disabled = false;
+    parseButton.textContent = "Checking URL";
 });
+
+async function fetchUrlsRecursively(urlElements, parser) {
+    return await Promise.all(urlElements.map(async urlElement => {
+        const loc = urlElement.getElementsByTagName("loc")[0].textContent;
+        if (urlElement.tagName === 'sitemap') {
+            try {
+                const response = await fetchWithCORSCheck(loc);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const text = await response.text();
+                const subXmlDoc = parser.parseFromString(text, "text/xml");
+                const urlElements = subXmlDoc.getElementsByTagName("sitemap");
+                if (urlElements.length) {
+                    return await fetchUrlsRecursively(Array.from(urlElements), parser);
+                } else {
+                    return [{ url: loc, checked: false }];
+                }
+            } catch (error) {
+                console.error(`Failed to fetch nested sitemap: ${error.message}`);
+                return [{ url: loc, checked: false }];
+            }
+        } else {
+            return { url: loc, checked: false };
+        }
+    }));
+}
 
 function renderUrlGrid() {
     urlGrid.innerHTML = '';
