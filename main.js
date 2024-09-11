@@ -185,7 +185,6 @@ function updateUrlCard(index) {
 
   const statusElement = card.querySelector('.status');
   statusElement.textContent = `Status: ${urlObj.status}`;
-  debugger
   statusElement.className = `status ${getStatusClass(urlObj.status)}`;
   statusElement.textContent = `Status: ${urlObj.status}`;
 
