@@ -1,0 +1,67 @@
+.fs-6-sm{
+  font-size: 0.8rem;
+}
+.card {
+  transition: all 0.3s ease;
+}
+.card:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 0;
+  padding-right: 0;
+  background: unset
+}
+.status {
+  font-weight: bold;
+}
+.status-success {
+  color: #28a745;
+}
+.status-error {
+  color: #dc3545;
+}
+.status-processing {
+  color: #6c757d;
+}
+.meta-info {
+  font-size: 0.9em;
+}
+.meta-info h6 {
+  margin-top: 1em;
+  font-weight: bold;
+}
+.meta-info p {
+  margin-bottom: 0.5em;
+}
+.meta-info img {
+  margin-top: 0.5em;
+  border: 1px solid #ddd;
+}
+.card-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.card-title a:hover {
+  text-decoration: underline;
+}
+.skeleton {
+  animation: skeleton-loading 1s linear infinite alternate;
+}
+@keyframes skeleton-loading {
+  0% {
+      background-color: hsl(200, 20%, 80%);
+  }
+  100% {
+      background-color: hsl(200, 20%, 95%);
+  }
+}
+.skeleton-text {
+  width: 100%;
+  height: 0.7rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.25rem;
+}
