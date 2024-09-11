@@ -81,6 +81,11 @@ parseButton.addEventListener('click', async () => {
     isCancelled = false;
     abortController = new AbortController(); // Tạo AbortController mới
 
+    // Xóa nội dung kết quả cũ
+    urlGrid.innerHTML = '';
+    urls = [];
+    updateUrlCounts();
+
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
     let urlElements = xmlDoc.getElementsByTagName("url");
@@ -95,7 +100,6 @@ parseButton.addEventListener('click', async () => {
         return;
     }
 
-    urls = [];
     for (const urlElement of urlElements) {
         if (isCancelled) break;
         await fetchUrlsRecursively([urlElement], parser);
@@ -164,6 +168,12 @@ function renderUrlGrid() {
     });
 }
 
+// Thêm các biến cho tùy chọn meta SEO ở đầu file
+const googleMetaCheckbox = document.getElementById('googleMeta');
+const facebookMetaCheckbox = document.getElementById('facebookMeta');
+const twitterMetaCheckbox = document.getElementById('twitterMeta');
+
+// Cập nhật hàm createUrlCard để loại bỏ các tùy chọn meta SEO
 function createUrlCard(urlObj, index) {
   const card = document.createElement('div');
   card.className = 'col';
@@ -177,18 +187,16 @@ function createUrlCard(urlObj, index) {
                   </span>
                   <button class="btn btn-outline-info btn-sm check-url" data-index="${index}">Làm mới Meta</button>
               </div>
-              <!--
-              <div class="form-check">
-                  <input class="form-check-input" type="checkbox" value="" id="checkbox${index}">
-                  <label class="form-check-label" for="checkbox${index}">
-                      Select
-                  </label>
-              </div>
-              -->
               <div class="meta-info mt-3">
                   <div class="skeleton skeleton-text"></div>
                   <div class="skeleton skeleton-text"></div>
                   <div class="skeleton skeleton-text"></div>
+              </div>
+              <div class="schema-info mt-3">
+                  <details>
+                      <summary class="schema-summary">Đang kiểm tra schema...</summary>
+                      <pre class="schema-content mt-2"></pre>
+                  </details>
               </div>
           </div>
       </div>
@@ -229,10 +237,20 @@ function getStatusClass(status) {
 async function checkUrl(index) {
   if (isCancelled) return;
   const urlObj = urls[index];
+  const card = document.querySelector(`.card[data-index="${index}"]`);
+  const metaContainer = card.querySelector('.meta-info');
+
   try {
       urlObj.status = 'Đang xử lý';
       updateUrlCard(index);
       logMessage(`Checking URL: ${urlObj.url}`);
+
+      // Hiển thị skeleton loading
+      metaContainer.innerHTML = `
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text"></div>
+      `;
 
       const response = await fetchWithCORSCheck(urlObj.url, abortController);
       if (!response.ok) {
@@ -293,6 +311,7 @@ function extractMetaInfo(html) {
   };
 }
 
+// Cập nhật hàm updateUrlCard để sử dụng các tùy chọn meta SEO toàn cục
 function updateUrlCard(index) {
   const urlObj = urls[index];
   const card = document.querySelector(`.card[data-index="${index}"]`);
@@ -303,36 +322,61 @@ function updateUrlCard(index) {
   statusElement.className = `status ${getStatusClass(urlObj.status)}`;
 
   const metaContainer = card.querySelector('.meta-info');
+  const schemaDetails = card.querySelector('.schema-info details');
+  const schemaSummary = card.querySelector('.schema-summary');
+  const schemaContent = card.querySelector('.schema-content');
+
   if (urlObj.meta) {
-    metaContainer.innerHTML = `
-      <h6>Meta Google:</h6>
-      <p>Tiêu đề: ${urlObj.meta.google.title}</p>
-      <p>Mô tả: ${urlObj.meta.google.description}</p>
-      <p>Từ khóa: ${urlObj.meta.google.keywords}</p>
-      <p>Canonical: ${urlObj.meta.google.canonical}</p>
-      <p>Robots: ${urlObj.meta.google.robots}</p>
-      ${urlObj.meta.google.favicon ? `<p>Favicon: <img src="${urlObj.meta.google.favicon}" alt="Favicon" style="width: 16px; height: 16px;"></p>` : ''}
+    let metaHtml = '';
 
-      <h6>Meta Facebook:</h6>
-      <p>Tiêu đề: ${urlObj.meta.facebook.title}</p>
-      <p>Mô tả: ${urlObj.meta.facebook.description}</p>
-      <p>URL: ${urlObj.meta.facebook.url}</p>
-      <p>Loại: ${urlObj.meta.facebook.type}</p>
-      <p>Tên trang: ${urlObj.meta.facebook.siteName}</p>
-      <p>Ngôn ngữ: ${urlObj.meta.facebook.locale}</p>
-      ${urlObj.meta.facebook.image ? `<p>Hình ảnh: <img src="${urlObj.meta.facebook.image}" alt="OG Image" style="max-width: 100%; height: auto;"></p>` : ''}
+    if (googleMetaCheckbox.checked) {
+      metaHtml += `
+        <h6>Meta Google:</h6>
+        <p>Tiêu đề: ${urlObj.meta.google.title}</p>
+        <p>Mô tả: ${urlObj.meta.google.description}</p>
+        <p>Từ khóa: ${urlObj.meta.google.keywords}</p>
+        <p>Canonical: ${urlObj.meta.google.canonical}</p>
+        <p>Robots: ${urlObj.meta.google.robots}</p>
+        ${urlObj.meta.google.favicon ? `<p>Favicon: <img src="${urlObj.meta.google.favicon}" alt="Favicon" style="width: 16px; height: 16px;"></p>` : ''}
+      `;
+    }
 
-      <h6>Meta Twitter:</h6>
-      <p>Card: ${urlObj.meta.twitter.card}</p>
-      <p>Tiêu đề: ${urlObj.meta.twitter.title}</p>
-      <p>Mô tả: ${urlObj.meta.twitter.description}</p>
-      <p>Site: ${urlObj.meta.twitter.site}</p>
-      <p>Người tạo: ${urlObj.meta.twitter.creator}</p>
-      ${urlObj.meta.twitter.image ? `<p>Hình ảnh: <img src="${urlObj.meta.twitter.image}" alt="Twitter Image" style="max-width: 100%; height: auto;"></p>` : ''}
+    if (facebookMetaCheckbox.checked) {
+      metaHtml += `
+        <h6>Meta Facebook:</h6>
+        <p>Tiêu đề: ${urlObj.meta.facebook.title}</p>
+        <p>Mô tả: ${urlObj.meta.facebook.description}</p>
+        <p>URL: ${urlObj.meta.facebook.url}</p>
+        <p>Loại: ${urlObj.meta.facebook.type}</p>
+        <p>Tên trang: ${urlObj.meta.facebook.siteName}</p>
+        <p>Ngôn ngữ: ${urlObj.meta.facebook.locale}</p>
+        ${urlObj.meta.facebook.image ? `<p>Hình ảnh: <img src="${urlObj.meta.facebook.image}" alt="OG Image" style="width: 100px; height: 100px; object-fit: contain"></p>` : ''}
+      `;
+    }
 
-      <h6>Schema.org:</h6>
-      <pre>${urlObj.meta.schema ? JSON.stringify(JSON.parse(urlObj.meta.schema), null, 2) : 'Không có dữ liệu Schema.org'}</pre>
-    `;
+    if (twitterMetaCheckbox.checked) {
+      metaHtml += `
+        <h6>Meta Twitter:</h6>
+        <p>Card: ${urlObj.meta.twitter.card}</p>
+        <p>Tiêu đề: ${urlObj.meta.twitter.title}</p>
+        <p>Mô tả: ${urlObj.meta.twitter.description}</p>
+        <p>Site: ${urlObj.meta.twitter.site}</p>
+        <p>Người tạo: ${urlObj.meta.twitter.creator}</p>
+        ${urlObj.meta.twitter.image ? `<p>Hình ảnh: <img src="${urlObj.meta.twitter.image}" alt="Twitter Image" style="max-width: 100%; height: auto;"></p>` : ''}
+      `;
+    }
+
+    metaContainer.innerHTML = metaHtml;
+
+    if (urlObj.meta.schema) {
+      schemaSummary.textContent = 'Hiển thị schema';
+      schemaContent.textContent = JSON.stringify(JSON.parse(urlObj.meta.schema), null, 2);
+      schemaDetails.style.display = 'block';
+    } else {
+      schemaSummary.textContent = 'Không có nội dung';
+      schemaContent.textContent = '';
+      schemaDetails.style.display = 'none';
+    }
   }
 }
 
@@ -370,35 +414,60 @@ const exportButton = document.getElementById('exportButton');
 
 exportButton.addEventListener('click', () => {
     let csvContent = "data:text/csv;charset=utf-8,";
-    csvContent += "URL,Trạng thái,Google Tiêu đề,Google Mô tả,Google Từ khóa,Google Canonical,Google Robots,Google Favicon,";
-    csvContent += "Facebook Tiêu đề,Facebook Mô tả,Facebook Hình ảnh,Facebook URL,Facebook Loại,Facebook Tên trang,Facebook Ngôn ngữ,";
-    csvContent += "Twitter Card,Twitter Tiêu đề,Twitter Mô tả,Twitter Hình ảnh,Twitter Site,Twitter Người tạo,Schema.org\n";
+    let headers = ["URL", "Trạng thái"];
+
+    if (googleMetaCheckbox.checked) {
+        headers = headers.concat(["Google Tiêu đề", "Google Mô tả", "Google Từ khóa", "Google Canonical", "Google Robots", "Google Favicon"]);
+    }
+    if (facebookMetaCheckbox.checked) {
+        headers = headers.concat(["Facebook Tiêu đề", "Facebook Mô tả", "Facebook Hình ảnh", "Facebook URL", "Facebook Loại", "Facebook Tên trang", "Facebook Ngôn ngữ"]);
+    }
+    if (twitterMetaCheckbox.checked) {
+        headers = headers.concat(["Twitter Card", "Twitter Tiêu đề", "Twitter Mô tả", "Twitter Hình ảnh", "Twitter Site", "Twitter Người tạo"]);
+    }
+
+    csvContent += headers.join(',') + "\n";
 
     urls.forEach(urlObj => {
         let row = [
             urlObj.url,
-            urlObj.status || '',
-            urlObj.meta?.google.title || '',
-            urlObj.meta?.google.description || '',
-            urlObj.meta?.google.keywords || '',
-            urlObj.meta?.google.canonical || '',
-            urlObj.meta?.google.robots || '',
-            urlObj.meta?.google.favicon || '',
-            urlObj.meta?.facebook.title || '',
-            urlObj.meta?.facebook.description || '',
-            urlObj.meta?.facebook.image || '',
-            urlObj.meta?.facebook.url || '',
-            urlObj.meta?.facebook.type || '',
-            urlObj.meta?.facebook.siteName || '',
-            urlObj.meta?.facebook.locale || '',
-            urlObj.meta?.twitter.card || '',
-            urlObj.meta?.twitter.title || '',
-            urlObj.meta?.twitter.description || '',
-            urlObj.meta?.twitter.image || '',
-            urlObj.meta?.twitter.site || '',
-            urlObj.meta?.twitter.creator || '',
-            urlObj.meta?.schema || ''
+            urlObj.status || ''
         ];
+
+        if (googleMetaCheckbox.checked) {
+            row = row.concat([
+                urlObj.meta?.google.title || '',
+                urlObj.meta?.google.description || '',
+                urlObj.meta?.google.keywords || '',
+                urlObj.meta?.google.canonical || '',
+                urlObj.meta?.google.robots || '',
+                urlObj.meta?.google.favicon || ''
+            ]);
+        }
+
+        if (facebookMetaCheckbox.checked) {
+            row = row.concat([
+                urlObj.meta?.facebook.title || '',
+                urlObj.meta?.facebook.description || '',
+                urlObj.meta?.facebook.image || '',
+                urlObj.meta?.facebook.url || '',
+                urlObj.meta?.facebook.type || '',
+                urlObj.meta?.facebook.siteName || '',
+                urlObj.meta?.facebook.locale || ''
+            ]);
+        }
+
+        if (twitterMetaCheckbox.checked) {
+            row = row.concat([
+                urlObj.meta?.twitter.card || '',
+                urlObj.meta?.twitter.title || '',
+                urlObj.meta?.twitter.description || '',
+                urlObj.meta?.twitter.image || '',
+                urlObj.meta?.twitter.site || '',
+                urlObj.meta?.twitter.creator || ''
+            ]);
+        }
+
         csvContent += row.map(value => `"${value.replace(/"/g, '""')}"`).join(',') + "\n";
     });
 
