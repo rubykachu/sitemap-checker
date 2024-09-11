@@ -68,3 +68,37 @@
   margin-bottom: 0.5rem;
   border-radius: 0.25rem;
 }
+
+/* Thêm vào cuối file */
+#tableContainer {
+  overflow-x: auto;
+}
+
+#urlTable {
+  width: 100%;
+}
+
+.dataTables_wrapper .dataTables_filter {
+  margin-bottom: 1rem;
+}
+
+.dataTables_wrapper .dataTables_length {
+  margin-bottom: 1rem;
+}
+
+.dt-buttons {
+  margin-bottom: 1rem;
+}
+
+.dt-button {
+  background-color: #f8f9fa;
+  border: 1px solid #ced4da;
+  padding: 0.375rem 0.75rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  border-radius: 0.25rem;
+}
+
+.dt-button:hover {
+  background-color: #e9ecef;
+}

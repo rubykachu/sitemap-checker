@@ -6,14 +6,18 @@ const sitemapContent = document.getElementById('sitemapContent');
 const sitemapUrlInput = document.getElementById('sitemapUrl');
 const parseButton = document.getElementById('parseButton');
 const urlGrid = document.getElementById('urlGrid');
-const searchInput = document.getElementById('searchInput');
-const openAllButton = document.getElementById('openAllButton');
 const totalUrlsSpan = document.getElementById('totalUrls');
 const checkedUrlsSpan = document.getElementById('checkedUrls');
 const loadingFetchUrl = document.getElementById('loadingFetchUrl');
 const logContent = document.getElementById('logContent');
 const cancelButton = document.getElementById('cancelButton');
 const currentYear = document.getElementById('currentYear');
+
+
+// Thêm các biến cho tùy chọn meta SEO ở đầu file
+const googleMetaCheckbox = document.getElementById('googleMeta');
+const facebookMetaCheckbox = document.getElementById('facebookMeta');
+const twitterMetaCheckbox = document.getElementById('twitterMeta');
 
 // Display copyright year
 const numYear = new Date().getFullYear();
@@ -22,6 +26,142 @@ document.getElementById('currentYear').textContent = numYear === 2024 ? '2024' :
 let urls = [];
 let isCancelled = false;
 let abortController;
+let dataTable;
+
+// Thêm biến mới để theo dõi số lượng request đang xử lý
+let activeRequests = 0;
+let requestCompletedAll = false;
+
+// Thêm các biến mới
+const gridViewBtn = document.getElementById('gridViewBtn');
+const tableViewBtn = document.getElementById('tableViewBtn');
+const tableContainer = document.getElementById('tableContainer');
+
+// Thêm sự kiện cho các nút chuyển đổi
+gridViewBtn.addEventListener('click', showGridView);
+tableViewBtn.addEventListener('click', showTableView);
+
+function showGridView() {
+  urlGrid.style.display = 'flex';
+  tableContainer.style.display = 'none';
+  gridViewBtn.classList.add('btn-primary');
+  gridViewBtn.classList.remove('btn-secondary');
+  tableViewBtn.classList.add('btn-secondary');
+  tableViewBtn.classList.remove('btn-primary');
+}
+
+function showTableView() {
+  urlGrid.style.display = 'none';
+  tableContainer.style.display = 'block';
+  gridViewBtn.classList.add('btn-secondary');
+  gridViewBtn.classList.remove('btn-primary');
+  tableViewBtn.classList.add('btn-primary');
+  tableViewBtn.classList.remove('btn-secondary');
+
+  if (requestCompletedAll) {
+    if (!dataTable) {
+      initDataTable();
+    } else {
+      dataTable.clear().rows.add(urls).draw();
+    }
+  }
+}
+
+// Thêm hàm mới để render DataTable khi tất cả yêu cầu hoàn thành
+function renderDataTableWhenReady() {
+  if (requestCompletedAll && tableContainer.style.display !== 'none') {
+    if (!dataTable) {
+      initDataTable();
+    } else {
+      dataTable.clear().rows.add(urls).draw();
+    }
+  }
+}
+
+function initDataTable() {
+  if (dataTable) {
+    dataTable.destroy();
+  }
+
+  const columns = [
+    { data: 'url', title: 'URL' },
+    { data: 'status', title: 'Trạng thái' }
+  ];
+
+  if (googleMetaCheckbox.checked) {
+    columns.push(
+      { data: 'meta.google.title', title: 'Google Tiêu đề' },
+      { data: 'meta.google.description', title: 'Google Mô tả' },
+      { data: 'meta.google.keywords', title: 'Google Từ khóa' },
+      { data: 'meta.google.canonical', title: 'Google Canonical' },
+      { data: 'meta.google.robots', title: 'Google Robots' },
+      { data: 'meta.google.favicon', title: 'Google Favicon' }
+    );
+  }
+
+  if (facebookMetaCheckbox.checked) {
+    columns.push(
+      { data: 'meta.facebook.title', title: 'Facebook Tiêu đề' },
+      { data: 'meta.facebook.description', title: 'Facebook Mô tả' },
+      { data: 'meta.facebook.image', title: 'Facebook Hình ảnh' },
+      { data: 'meta.facebook.url', title: 'Facebook URL' },
+      { data: 'meta.facebook.type', title: 'Facebook Loại' },
+      { data: 'meta.facebook.siteName', title: 'Facebook Tên trang' },
+      { data: 'meta.facebook.locale', title: 'Facebook Ngôn ngữ' }
+    );
+  }
+
+  if (twitterMetaCheckbox.checked) {
+    columns.push(
+      { data: 'meta.twitter.card', title: 'Twitter Card' },
+      { data: 'meta.twitter.title', title: 'Twitter Tiêu đề' },
+      { data: 'meta.twitter.description', title: 'Twitter Mô tả' },
+      { data: 'meta.twitter.image', title: 'Twitter Hình ảnh' },
+      { data: 'meta.twitter.site', title: 'Twitter Site' },
+      { data: 'meta.twitter.creator', title: 'Twitter Người tạo' }
+    );
+  }
+
+  // Tạo cấu trúc bảng
+  const tableHtml = `
+    <table id="urlTable" class="table table-striped table-bordered">
+      <thead>
+        <tr>
+          ${columns.map(col => `<th>${col.title}</th>`).join('')}
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  `;
+
+  // Chèn cấu trúc bảng vào container
+  tableContainer.innerHTML = tableHtml;
+
+  dataTable = $('#urlTable').DataTable({
+    data: urls,
+    columns: columns,
+    pageLength: 10,
+    lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "Tất cả"]],
+    language: {
+      url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/vi.json'
+    },
+    dom: 'Bfrtip',
+    buttons: [
+      'colvis'
+    ]
+  });
+}
+
+// Thêm sự kiện lắng nghe cho các checkbox meta SEO
+googleMetaCheckbox.addEventListener('change', updateDataTable);
+facebookMetaCheckbox.addEventListener('change', updateDataTable);
+twitterMetaCheckbox.addEventListener('change', updateDataTable);
+
+function updateDataTable() {
+  if (dataTable) {
+    initDataTable();
+  }
+}
 
 sitemapFile.addEventListener('change', (event) => {
   const file = event.target.files[0];
@@ -74,55 +214,128 @@ function updateUrlCounts() {
   checkedUrlsSpan.textContent = urls.filter(url => url.checked).length;
 }
 
-parseButton.addEventListener('click', async () => {
+// Hàm cập nhật trạng thái của các nút
+function updateButtonStates() {
+  if (activeRequests > 0) {
     parseButton.disabled = true;
-    parseButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Processing...';
+    parseButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${parseButton.dataset.textProcessing}`;
     cancelButton.style.display = 'inline-block';
-    isCancelled = false;
-    abortController = new AbortController(); // Tạo AbortController mới
+  } else {
+    parseButton.disabled = false;
+    parseButton.innerHTML = parseButton.dataset.textDefault;
+    cancelButton.style.display = 'none';
+  }
+}
 
-    // Xóa nội dung kết quả cũ
-    urlGrid.innerHTML = '';
-    urls = [];
-    updateUrlCounts();
+// Cập nhật hàm checkUrl
+async function checkUrl(index) {
+  if (isCancelled) return;
+  const urlObj = urls[index];
+  const card = document.querySelector(`.card[data-index="${index}"]`);
+  const metaContainer = card?.querySelector('.meta-info');
 
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
-    let urlElements = xmlDoc.getElementsByTagName("url");
+  try {
+    activeRequests++; // Tăng số lượng request đang xử lý
+    updateButtonStates();
 
-    if (!urlElements.length) {
-        urlElements = xmlDoc.getElementsByTagName("sitemap");
+    urlObj.status = 'Đang xử lý';
+    updateUrlCard(index);
+    logMessage(`Checking URL: ${urlObj.url}`);
+
+    if (metaContainer) {
+      metaContainer.innerHTML = `
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text"></div>
+          <div class="skeleton skeleton-text"></div>
+      `;
     }
 
-    if (!urlElements.length) {
-        alert("The structure of the URL could not be detected in the sitemap.");
-        location.reload();
-        return;
+    const response = await fetchWithCORSCheck(urlObj.url, abortController);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    const html = await response.text();
+    const metaInfo = extractMetaInfo(html);
+    urlObj.meta = metaInfo;
+    urlObj.checked = true;
+    urlObj.status = 'OK';
+    logMessage(`Successfully checked URL: ${urlObj.url}`);
+  } catch (error) {
+    if (error.message === 'Request was cancelled') {
+      urlObj.status = 'Đã hủy';
+    } else {
+      urlObj.checked = true;
+      urlObj.status = `Lỗi: ${error.message}`;
+      logMessage(`Error checking URL ${urlObj.url}: ${error.message}`);
+    }
+  } finally {
+    activeRequests--; // Giảm số lượng request đang xử lý
+    if (activeRequests === 0) {
+        requestCompletedAll = true;
+        renderDataTableWhenReady(); // Gọi hàm mới này khi tất cả yêu cầu hoàn thành
+    }
+    updateButtonStates();
+    urls[index] = urlObj;
+    updateUrlCard(index);
+    updateStats();
 
-    try {
-        await fetchUrlsRecursively(Array.from(urlElements), parser);
-    } catch (error) {
-        logMessage(`Error processing sitemap: ${error.message}`);
-    } finally {
-        parseButton.disabled = false;
-        parseButton.innerHTML = 'Checking URL';
+    if (dataTable) {
+      dataTable.row(index).data(urlObj).draw(false);
     }
+  }
+}
+
+// Cập nhật hàm parseButton.addEventListener
+parseButton.addEventListener('click', async () => {
+  if (activeRequests > 0) return;
+
+  isCancelled = false;
+  abortController = new AbortController();
+
+  // Xóa nội dung kết quả cũ
+  urlGrid.innerHTML = '';
+  urls = [];
+  updateUrlCounts();
+
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(sitemapContent.value, "text/xml");
+  let urlElements = xmlDoc.getElementsByTagName("url");
+
+  if (!urlElements.length) {
+    urlElements = xmlDoc.getElementsByTagName("sitemap");
+  }
+
+  if (!urlElements.length) {
+    alert("Không thể phát hiện cấu trúc URL trong sitemap.");
+    return;
+  }
+
+  try {
+    await fetchUrlsRecursively(Array.from(urlElements), parser);
+  } catch (error) {
+    logMessage(`Lỗi khi xử lý sitemap: ${error.message}`);
+  } finally {
+    logMessage('Quá trình xử lý sitemap đã hoàn tất');
+  }
 });
 
+// Cập nhật hàm cancelButton.addEventListener
 cancelButton.addEventListener('click', () => {
-    isCancelled = true;
-    if (abortController) {
-        abortController.abort(); // Hủy tất cả các request đang thực thi
-    }
-    parseButton.disabled = false;
-    parseButton.innerHTML = 'Check URL';
-    cancelButton.style.display = 'none';
-    logMessage('Operation cancelled by user');
+  if (activeRequests === 0) return;
+
+  isCancelled = true;
+  if (abortController) {
+    abortController.abort();
+  }
+  logMessage('Người dùng đã hủy thao tác');
 });
 
 async function fetchUrlsRecursively(urlElements, parser, depth = 0) {
+    if (isCancelled) return;
+
     const fetchPromises = urlElements.map(async (urlElement) => {
+        if (isCancelled) return;
+
         const loc = urlElement.getElementsByTagName("loc")[0].textContent;
         if (urlElement.tagName === 'sitemap') {
             try {
@@ -141,6 +354,7 @@ async function fetchUrlsRecursively(urlElements, parser, depth = 0) {
                     const subUrls = subXmlDoc.getElementsByTagName("url");
                     logMessage(`Tìm thấy ${subUrls.length} URL trong sitemap con: ${loc}`);
                     Array.from(subUrls).forEach(subUrl => {
+                        if (isCancelled) return;
                         const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
                         addAndRenderUrl(subLoc);
                     });
@@ -168,11 +382,6 @@ function renderSingleUrl(urlObj, index) {
     const card = createUrlCard(urlObj, index);
     urlGrid.appendChild(card);
 }
-
-// Thêm các biến cho tùy chọn meta SEO ở đầu file
-const googleMetaCheckbox = document.getElementById('googleMeta');
-const facebookMetaCheckbox = document.getElementById('facebookMeta');
-const twitterMetaCheckbox = document.getElementById('twitterMeta');
 
 // Cập nhật hàm createUrlCard để loại bỏ các tùy chọn meta SEO
 function createUrlCard(urlObj, index) {
@@ -233,49 +442,6 @@ function getStatusClass(status) {
   if (!status || status === 'Chưa kiểm tra' || status === 'Đang xử lý') return 'status-processing';
   if (status === 'OK') return 'status-success';
   return 'status-error';
-}
-
-async function checkUrl(index) {
-  if (isCancelled) return;
-  const urlObj = urls[index];
-  const card = document.querySelector(`.card[data-index="${index}"]`);
-  const metaContainer = card.querySelector('.meta-info');
-
-  try {
-      urlObj.status = 'Đang xử lý';
-      updateUrlCard(index);
-      logMessage(`Checking URL: ${urlObj.url}`);
-
-      // Hiển thị skeleton loading
-      metaContainer.innerHTML = `
-          <div class="skeleton skeleton-text"></div>
-          <div class="skeleton skeleton-text"></div>
-          <div class="skeleton skeleton-text"></div>
-      `;
-
-      const response = await fetchWithCORSCheck(urlObj.url, abortController);
-      if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const html = await response.text();
-      const metaInfo = extractMetaInfo(html);
-      urlObj.meta = metaInfo;
-      urlObj.checked = true;
-      urlObj.status = 'OK';
-      logMessage(`Successfully checked URL: ${urlObj.url}`);
-  } catch (error) {
-      if (error.message === 'Request was cancelled') {
-          urlObj.status = 'Đã hủy';
-      } else {
-          urlObj.checked = true;
-          urlObj.status = `Lỗi: ${error.message}`;
-          logMessage(`Error checking URL ${urlObj.url}: ${error.message}`);
-      }
-  }
-
-  urls[index] = urlObj;
-  updateUrlCard(index);
-  updateStats();
 }
 
 function extractMetaInfo(html) {
@@ -379,35 +545,16 @@ function updateUrlCard(index) {
       schemaDetails.style.display = 'none';
     }
   }
+
+  if (dataTable) {
+    dataTable.row(index).data(urlObj).draw(false);
+  }
 }
 
 function updateStats() {
   const checkedUrls = urls.filter(url => url.checked).length;
   checkedUrlsSpan.textContent = checkedUrls;
 }
-
-searchInput.addEventListener('input', (e) => {
-    const searchTerm = e.target.value.toLowerCase();
-    const filteredUrls = urls.filter(urlObj => urlObj.url.toLowerCase().includes(searchTerm));
-    renderFilteredUrls(filteredUrls);
-});
-
-function renderFilteredUrls(filteredUrls) {
-    urlGrid.innerHTML = '';
-    filteredUrls.forEach((urlObj, index) => {
-        const card = createUrlCard(urlObj, index);
-        urlGrid.appendChild(card);
-    });
-}
-
-// openAllButton.addEventListener('click', () => {
-//     urls.forEach((urlObj, index) => {
-//         const checkbox = document.getElementById(`checkbox${index}`);
-//         if (checkbox && checkbox.checked) {
-//             window.open(urlObj.url, '_blank');
-//         }
-//     });
-// });
 
 // Export CSV
 
@@ -426,6 +573,9 @@ exportButton.addEventListener('click', () => {
     if (twitterMetaCheckbox.checked) {
         headers = headers.concat(["Twitter Card", "Twitter Tiêu đề", "Twitter Mô tả", "Twitter Hình ảnh", "Twitter Site", "Twitter Người tạo"]);
     }
+
+    // Thêm cột Schema vào headers
+    headers.push("Schema");
 
     csvContent += headers.join(',') + "\n";
 
@@ -469,6 +619,9 @@ exportButton.addEventListener('click', () => {
             ]);
         }
 
+        // Thêm nội dung Schema vào row
+        row.push(urlObj.meta?.schema || '');
+
         csvContent += row.map(value => `"${value.replace(/"/g, '""')}"`).join(',') + "\n";
     });
 
@@ -486,3 +639,7 @@ function logMessage(message) {
     logContent.value += `[${timestamp}] ${message}\n`;
     logContent.scrollTop = logContent.scrollHeight;
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  // Đặt toàn bộ mã JavaScript hiện tại vào đây
+});
