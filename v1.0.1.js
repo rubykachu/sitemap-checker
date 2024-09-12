@@ -229,7 +229,8 @@ function updateUrlCounts() {
 
 // Function to update button states
 function updateButtonStates() {
-  if (activeRequests > 0) {
+  console.log(activeRequests)
+  if (activeRequests > 1) {
     showButtonProcessing();
   } else {
     showButtonOriginal();

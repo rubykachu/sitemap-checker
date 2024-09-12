@@ -50,10 +50,10 @@
   <body>
     <div class="container d-flex flex-column min-vh-100">
       <div class="mb-4 pt-4 d-flex align-items-center">
-        <img src="/vite.svg" alt="Logo" class="me-2" width="50px">
+        <img src="/logo.png" alt="Logo" class="me-2" width="50px">
         <h1>
           Sitemap Checker
-          <span class="badge bg-info fs-6-sm">TQM</span>
+          <span class="badge bg-info fs-6-sm">v1.0.1</span>
         </h1>
       </div>
 
@@ -92,10 +92,11 @@
       <div class="card mb-4">
         <div class="card-body">
           <div class="mb-3">
-            <div class="row align-items-center">
+            <div class="row align-items-baseline">
               <label for="concurrentRequests" class="col-sm-2 col-form-label fw-bold">Concurrent requests:</label>
               <div class="col-sm-8">
                 <input type="number" class="form-control" id="concurrentRequests" placeholder="Default: 15" min="1">
+                <small class="form-text text-muted small">Setting a high number of concurrent requests may consume excessive memory.</small>
               </div>
             </div>
           </div>
@@ -186,7 +187,7 @@
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.bootstrap5.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
-    <script type="module" src="/beta.js"></script>
+    <script type="module" src="/v1.0.1.js"></script>
     <script>
       const currentYear = new Date().getFullYear();
       document.getElementById('currentYear').textContent = currentYear === 2024 ? '2024' : `2024 - ${currentYear}`;
