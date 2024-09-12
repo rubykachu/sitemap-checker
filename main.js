@@ -224,14 +224,22 @@ function updateUrlCounts() {
 // Hàm cập nhật trạng thái của các nút
 function updateButtonStates() {
   if (activeRequests > 0) {
-    parseButton.disabled = true;
-    parseButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${parseButton.dataset.textProcessing}`;
-    cancelButton.style.display = 'inline-block';
+    showButtonProcessing();
   } else {
-    parseButton.disabled = false;
-    parseButton.innerHTML = parseButton.dataset.textDefault;
-    cancelButton.style.display = 'none';
+    showButtonOriginal();
   }
+}
+
+function showButtonProcessing() {
+  parseButton.disabled = true;
+  parseButton.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> ${parseButton.dataset.textProcessing}`;
+  cancelButton.style.display = 'inline-block';
+}
+
+function showButtonOriginal() {
+  parseButton.disabled = false;
+  parseButton.innerHTML = parseButton.dataset.textDefault;
+  cancelButton.style.display = 'none';
 }
 
 // Thêm hàm mới để render DataTable khi tất cả yêu cầu hoàn thành
@@ -306,6 +314,8 @@ async function checkUrl(index) {
 // Cập nhật hàm parseButton.addEventListener
 parseButton.addEventListener('click', async () => {
   if (activeRequests > 0) return;
+
+  showButtonProcessing();
 
   isCancelled = false;
   abortController = new AbortController();
