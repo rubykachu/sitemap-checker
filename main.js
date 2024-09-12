@@ -359,67 +359,45 @@ cancelButton.addEventListener('click', () => {
   logMessage('User cancelled the operation');
 });
 
-const MAX_CONCURRENT_REQUESTS = 10; // Tăng số lượng request đồng thời
-const BATCH_SIZE = 50; // Xử lý theo lô
-
 async function fetchUrlsRecursively(urlElements, parser, depth = 0) {
     if (isCancelled) return;
 
-    const batchProcess = async (batch) => {
-        await Promise.all(batch.map(async (urlElement) => {
-            if (isCancelled) return;
+    const fetchPromises = urlElements.map(async (urlElement) => {
+        if (isCancelled) return;
 
-            const loc = urlElement.getElementsByTagName("loc")[0].textContent;
-            await enqueueRequest(async () => {
-                if (urlElement.tagName === 'sitemap') {
-                    try {
-                        logMessage(`Đang truy cập sitemap con (độ sâu ${depth}): ${loc}`);
-                        const response = await fetchWithCORSCheck(loc, abortController);
-                        if (!response.ok) {
-                            throw new Error(`Lỗi HTTP! trạng thái: ${response.status}`);
-                        }
-                        const text = await response.text();
-                        logMessage(`Đã tải thành công sitemap con: ${loc}`);
-                        const subXmlDoc = parser.parseFromString(text, "text/xml");
-                        const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
-                        if (subUrlElements.length) {
-                            await fetchUrlsRecursively(Array.from(subUrlElements), parser, depth + 1);
-                        } else {
-                            const subUrls = subXmlDoc.getElementsByTagName("url");
-                            logMessage(`Tìm thấy ${subUrls.length} URL trong sitemap con: ${loc}`);
-                            Array.from(subUrls).forEach(subUrl => {
-                                if (isCancelled) return;
-                                const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
-                                addAndRenderUrl(subLoc);
-                            });
-                        }
-                    } catch (error) {
-                        logMessage(`Lỗi khi tải sitemap con ${loc}: ${error.message}`);
-                        addAndRenderUrl(loc);
-                    }
-                } else {
-                    addAndRenderUrl(loc);
+        const loc = urlElement.getElementsByTagName("loc")[0].textContent;
+        if (urlElement.tagName === 'sitemap') {
+            try {
+                logMessage(`Accessing child sitemap (depth ${depth}): ${loc}`);
+                const response = await fetchWithCORSCheck(loc, abortController);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            });
-        }));
-    };
+                const text = await response.text();
+                logMessage(`Successfully loaded child sitemap: ${loc}`);
+                const subXmlDoc = parser.parseFromString(text, "text/xml");
+                const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
+                if (subUrlElements.length) {
+                    await fetchUrlsRecursively(Array.from(subUrlElements), parser, depth + 1);
+                } else {
+                    const subUrls = subXmlDoc.getElementsByTagName("url");
+                    logMessage(`Found ${subUrls.length} URLs in child sitemap: ${loc}`);
+                    Array.from(subUrls).forEach(subUrl => {
+                        if (isCancelled) return;
+                        const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
+                        addAndRenderUrl(subLoc);
+                    });
+                }
+            } catch (error) {
+                logMessage(`Error loading child sitemap ${loc}: ${error.message}`);
+                addAndRenderUrl(loc);
+            }
+        } else {
+            addAndRenderUrl(loc);
+        }
+    });
 
-    for (let i = 0; i < urlElements.length; i += BATCH_SIZE) {
-        const batch = urlElements.slice(i, i + BATCH_SIZE);
-        await batchProcess(batch);
-    }
-}
-
-async function enqueueRequest(requestFunction) {
-    while (activeRequests >= MAX_CONCURRENT_REQUESTS) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    activeRequests++;
-    try {
-        await requestFunction();
-    } finally {
-        activeRequests--;
-    }
+    await Promise.all(fetchPromises);
 }
 
 function addAndRenderUrl(url) {
