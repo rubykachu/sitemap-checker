@@ -50,7 +50,7 @@
   <body>
     <div class="container d-flex flex-column min-vh-100">
       <div class="mb-4 pt-4 d-flex align-items-center">
-        <img src="/logo.png" alt="Logo" class="me-2" width="50px">
+        <img src="/vite.svg" alt="Logo" class="me-2" width="50px">
         <h1>
           Sitemap Checker
           <span class="badge bg-info fs-6-sm">TQM</span>
@@ -91,6 +91,15 @@
 
       <div class="card mb-4">
         <div class="card-body">
+          <div class="mb-3">
+            <div class="row align-items-center">
+              <label for="concurrentRequests" class="col-sm-2 col-form-label fw-bold">Concurrent requests:</label>
+              <div class="col-sm-8">
+                <input type="number" class="form-control" id="concurrentRequests" placeholder="Default: 15" min="1">
+              </div>
+            </div>
+          </div>
+
           <div class="mb-3">
             <div class="row align-items-center">
               <label class="col-sm-2 col-form-label fw-bold">SEO information:</label>
@@ -177,7 +186,7 @@
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.bootstrap5.min.js"></script>
     <script type="text/javascript" src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="/beta.js"></script>
     <script>
       const currentYear = new Date().getFullYear();
       document.getElementById('currentYear').textContent = currentYear === 2024 ? '2024' : `2024 - ${currentYear}`;

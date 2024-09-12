@@ -13,6 +13,12 @@ const logContent = document.getElementById('logContent');
 const cancelButton = document.getElementById('cancelButton');
 const currentYear = document.getElementById('currentYear');
 
+const concurrentRequestsInput = document.getElementById('concurrentRequests');
+let MAX_CONCURRENT_REQUESTS = 15; // Default value
+
+const BATCH_SIZE = 50; // Process in batches
+let processingQueue = [];
+
 
 // Add variables for SEO meta options at the top of the file
 const googleMetaCheckbox = document.getElementById('googleMeta');
@@ -315,7 +321,9 @@ async function checkUrl(index) {
 parseButton.addEventListener('click', async () => {
   if (activeRequests > 0) return;
 
-  showButtonProcessing();
+  // Update MAX_CONCURRENT_REQUESTS
+  const userInput = parseInt(concurrentRequestsInput.value);
+  MAX_CONCURRENT_REQUESTS = userInput > 0 ? userInput : 15;
 
   isCancelled = false;
   abortController = new AbortController();
@@ -339,12 +347,15 @@ parseButton.addEventListener('click', async () => {
     return;
   }
 
+  showButtonProcessing();
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
   try {
     await fetchUrlsRecursively(Array.from(urlElements), parser);
   } catch (error) {
     logMessage(`Error processing sitemap: ${error.message}`);
   } finally {
-    logMessage('Sitemap processing completed');
+    logMessage('Successfully processed sitemap');
   }
 });
 
@@ -359,66 +370,66 @@ cancelButton.addEventListener('click', () => {
   logMessage('User cancelled the operation');
 });
 
-const MAX_CONCURRENT_REQUESTS = 10; // Tăng số lượng request đồng thời
-const BATCH_SIZE = 50; // Xử lý theo lô
-
 async function fetchUrlsRecursively(urlElements, parser, depth = 0) {
     if (isCancelled) return;
 
-    const batchProcess = async (batch) => {
-        await Promise.all(batch.map(async (urlElement) => {
-            if (isCancelled) return;
+    const processUrlElement = async (urlElement) => {
+        if (isCancelled) return;
 
-            const loc = urlElement.getElementsByTagName("loc")[0].textContent;
-            await enqueueRequest(async () => {
-                if (urlElement.tagName === 'sitemap') {
-                    try {
-                        logMessage(`Đang truy cập sitemap con (độ sâu ${depth}): ${loc}`);
-                        const response = await fetchWithCORSCheck(loc, abortController);
-                        if (!response.ok) {
-                            throw new Error(`Lỗi HTTP! trạng thái: ${response.status}`);
-                        }
-                        const text = await response.text();
-                        logMessage(`Đã tải thành công sitemap con: ${loc}`);
-                        const subXmlDoc = parser.parseFromString(text, "text/xml");
-                        const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
-                        if (subUrlElements.length) {
-                            await fetchUrlsRecursively(Array.from(subUrlElements), parser, depth + 1);
-                        } else {
-                            const subUrls = subXmlDoc.getElementsByTagName("url");
-                            logMessage(`Tìm thấy ${subUrls.length} URL trong sitemap con: ${loc}`);
-                            Array.from(subUrls).forEach(subUrl => {
-                                if (isCancelled) return;
-                                const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
-                                addAndRenderUrl(subLoc);
-                            });
-                        }
-                    } catch (error) {
-                        logMessage(`Lỗi khi tải sitemap con ${loc}: ${error.message}`);
-                        addAndRenderUrl(loc);
-                    }
-                } else {
-                    addAndRenderUrl(loc);
+        const loc = urlElement.getElementsByTagName("loc")[0].textContent;
+        if (urlElement.tagName === 'sitemap') {
+            try {
+                logMessage(`Accessing child sitemap (depth ${depth}): ${loc}`);
+                const response = await fetchWithCORSCheck(loc, abortController);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            });
-        }));
+                const text = await response.text();
+                logMessage(`Successfully loaded child sitemap: ${loc}`);
+                const subXmlDoc = parser.parseFromString(text, "text/xml");
+                const subUrlElements = subXmlDoc.getElementsByTagName("sitemap");
+                if (subUrlElements.length) {
+                    await fetchUrlsRecursively(Array.from(subUrlElements), parser, depth + 1);
+                } else {
+                    const subUrls = subXmlDoc.getElementsByTagName("url");
+                    logMessage(`Found ${subUrls.length} URLs in child sitemap: ${loc}`);
+                    Array.from(subUrls).forEach(subUrl => {
+                        if (isCancelled) return;
+                        const subLoc = subUrl.getElementsByTagName("loc")[0].textContent;
+                        addAndRenderUrl(subLoc);
+                    });
+                }
+            } catch (error) {
+                logMessage(`Error loading child sitemap ${loc}: ${error.message}`);
+                addAndRenderUrl(loc);
+            }
+        } else {
+            addAndRenderUrl(loc);
+        }
     };
 
-    for (let i = 0; i < urlElements.length; i += BATCH_SIZE) {
-        const batch = urlElements.slice(i, i + BATCH_SIZE);
-        await batchProcess(batch);
+    for (const urlElement of urlElements) {
+        processingQueue.push(() => processUrlElement(urlElement));
     }
+
+    await processQueue();
 }
 
-async function enqueueRequest(requestFunction) {
-    while (activeRequests >= MAX_CONCURRENT_REQUESTS) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+async function processQueue() {
+    while (processingQueue.length > 0 && activeRequests < MAX_CONCURRENT_REQUESTS) {
+        const batch = processingQueue.splice(0, Math.min(BATCH_SIZE, MAX_CONCURRENT_REQUESTS - activeRequests));
+        activeRequests += batch.length;
+        await Promise.all(batch.map(async (task) => {
+            try {
+                await task();
+            } finally {
+                activeRequests--;
+            }
+        }));
     }
-    activeRequests++;
-    try {
-        await requestFunction();
-    } finally {
-        activeRequests--;
+
+    if (processingQueue.length > 0) {
+        setTimeout(processQueue, 100);
     }
 }
 
@@ -427,6 +438,10 @@ function addAndRenderUrl(url) {
     urls.push(urlObj);
     renderSingleUrl(urlObj, urls.length - 1);
     updateUrlCounts();
+    processingQueue.push(() => checkUrl(urls.length - 1));
+    if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+        processQueue();
+    }
 }
 
 // Update createUrlCard function to remove SEO meta options
